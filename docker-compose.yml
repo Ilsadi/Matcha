@@ -1,0 +1,15 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: matcha-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app:z
+      - /app/node_modules
+    env_file:
+      - .env
+    environment:
+      - VITE_API_TARGET=${VITE_API_TARGET:-http://localhost:5000}
