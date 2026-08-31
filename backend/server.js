@@ -29,15 +29,39 @@ const confirmServerIsRunning = (req, res) => {
 }
 
 const getUsers = (req, res) => {
-  res.status(200).json(users)({
-    status: "success",
-    data: users
-  })
+  const { city } = req.query;
+
+  if (!city) {
+    return res.status(200).json(users);
+  }
+
+  const cities = Array.isArray(city) ? city : [city];
+  const normalizedCities = cities.map((item) => item.toLowerCase());
+
+  const filteredUsers = users.filter((user) =>
+    normalizedCities.includes(user.city.toLowerCase())
+  );
+
+  res.status(200).json(filteredUsers);
+};
+
+const getUserById = (req, res) => {
+  const userId = Number(req.params.id);
+  const user = users.find((person) => person.id === userId);
+
+  if (!user) {
+    return res.status(404).json({
+      message: 'Utilisateur non trouvé'
+    });
+  }
+
+  res.status(200).json(user);
 };
 
 app.get('/', confirmServerIsRunning);
 
 app.get('/users', getUsers);
+app.get('/users/:id', getUserById);
 
 app.listen(PORT, () => {
   console.log(`Serveur backend lancé sur http://localhost:${PORT}`);
