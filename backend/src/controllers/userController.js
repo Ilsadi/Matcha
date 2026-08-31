@@ -1,50 +1,106 @@
-const users = require('../data/usersData');
+const supabase = require('../config/supabase');
 
-const getUsers = (req, res) => {
-  const { city } = req.query;
+const parseUserId = (value) => {
+  const userId = Number(value);
 
-  if (!city) {
-    return res.status(200).json(users);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return null;
   }
 
-  const cities = Array.isArray(city) ? city : [city];
-  const normalizedCities = cities.map((item) => item.toLowerCase());
-
-  const filteredUsers = users.filter((user) =>
-    normalizedCities.includes(user.city.toLowerCase())
-  );
-
-  return res.status(200).json(filteredUsers);
+  return userId;
 };
 
-const getUserById = (req, res) => {
-  const userId = Number(req.params.id);
-  const user = users.find((person) => person.id === userId);
+const validateRequiredFields = (payload, requiredFields) => {
+  const missingFields = requiredFields.filter((field) => {
+    const value = payload[field];
+    return value === undefined || value === null || String(value).trim() === '';
+  });
 
-  if (!user) {
-    return res.status(404).json({
-      message: 'Utilisateur non trouvé'
+  return missingFields;
+};
+
+const validateAge = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return false;
+  }
+
+  const ageNumber = Number(value);
+  return Number.isInteger(ageNumber) && ageNumber > 0;
+};
+
+const isSupabaseConfigured = () => Boolean(supabase);
+
+const getUsers = async (req, res) => {
+  const { city } = req.query;
+
+  if (!isSupabaseConfigured()) {
+    if (!city) {
+      return res.status(200).json(users);
+    }
+
+    const cities = Array.isArray(city) ? city : [city];
+    const normalizedCities = cities.map((item) => item.toLowerCase());
+
+    const filteredUsers = users.filter((user) =>
+      normalizedCities.includes(user.city.toLowerCase())
+    );
+
+    return res.status(200).json(filteredUsers);
+  }
+
+  let query = supabase.from('users').select('*');
+
+  if (city) {
+    query = query.ilike('city', String(city));
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return res.status(500).json({
+      message: 'Erreur de récupération des utilisateurs.',
+      error: error.message
     });
   }
 
-  return res.status(200).json(user);
+  return res.status(200).json(data);
 };
 
-const createUser = (req, res) => {
-  const { name, age, city } = req.body;
-  const missingFields = [];
+const getUserById = async (req, res) => {
+  const userId = parseUserId(req.params.id);
 
-  if (name === undefined || name === null || String(name).trim() === '') {
-    missingFields.push('name');
+  if (!userId) {
+    return res.status(400).json({
+      message: 'L’identifiant utilisateur est invalide. Il doit être un nombre entier positif.'
+    });
   }
 
-  if (age === undefined || age === null || String(age).trim() === '') {
-    missingFields.push('age');
+  if (!isSupabaseConfigured()) {
+    const user = users.find((person) => person.id === userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    }
+
+    return res.status(200).json(user);
   }
 
-  if (city === undefined || city === null || String(city).trim() === '') {
-    missingFields.push('city');
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (error) {
+    return res.status(404).json({ message: 'Utilisateur non trouvé.' });
   }
+
+  return res.status(200).json(data);
+};
+
+const createUser = async (req, res) => {
+  const { name, age, city } = req.body || {};
+  const missingFields = validateRequiredFields({ name, age, city }, ['name', 'age', 'city']);
 
   if (missingFields.length > 0) {
     return res.status(400).json({
@@ -53,60 +109,95 @@ const createUser = (req, res) => {
     });
   }
 
-  const newUser = {
-    id: users.length ? users[users.length - 1].id + 1 : 1,
+  if (!validateAge(age)) {
+    return res.status(400).json({
+      message: 'L’age doit être un nombre entier positif.'
+    });
+  }
+
+  const normalizedUser = {
     name: String(name).trim(),
-    age,
+    age: Number(age),
     city: String(city).trim()
   };
 
-  users.push(newUser);
+  if (!isSupabaseConfigured()) {
+    const newUser = {
+      id: users.length ? users[users.length - 1].id + 1 : 1,
+      ...normalizedUser
+    };
 
-  return res.status(201).json(newUser);
-};
+    users.push(newUser);
+    return res.status(201).json(newUser);
+  }
 
-const deleteUserById = (req, res) => {
-  const userId = Number(req.params.id);
-  const userIndex = users.findIndex((user) => user.id === userId);
+  const { data, error } = await supabase
+    .from('users')
+    .insert([normalizedUser])
+    .select()
+    .single();
 
-  if (userIndex === -1) {
-    return res.status(404).json({
-      message: 'Utilisateur non trouvé'
+  if (error) {
+    return res.status(400).json({
+      message: 'Erreur lors de la création de l’utilisateur.',
+      error: error.message
     });
   }
 
-  const [deletedUser] = users.splice(userIndex, 1);
+  return res.status(201).json(data);
+};
+
+const deleteUserById = async (req, res) => {
+  const userId = parseUserId(req.params.id);
+
+  if (!userId) {
+    return res.status(400).json({
+      message: 'L’identifiant utilisateur est invalide. Il doit être un nombre entier positif.'
+    });
+  }
+
+  if (!isSupabaseConfigured()) {
+    const userIndex = users.findIndex((user) => user.id === userId);
+
+    if (userIndex === -1) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    }
+
+    const [deletedUser] = users.splice(userIndex, 1);
+    return res.status(200).json({
+      message: 'Utilisateur supprimé avec succès.',
+      deletedUser
+    });
+  }
+
+  const { data, error } = await supabase
+    .from('users')
+    .delete()
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+  }
 
   return res.status(200).json({
-    message: 'Utilisateur supprimé avec succès',
-    deletedUser
+    message: 'Utilisateur supprimé avec succès.',
+    deletedUser: data
   });
 };
 
-const updateUserById = (req, res) => {
-  const userId = Number(req.params.id);
-  const userIndex = users.findIndex((user) => user.id === userId);
+const updateUserById = async (req, res) => {
+  const userId = parseUserId(req.params.id);
 
-  if (userIndex === -1) {
-    return res.status(404).json({
-      message: 'Utilisateur non trouvé'
+  if (!userId) {
+    return res.status(400).json({
+      message: 'L’identifiant utilisateur est invalide. Il doit être un nombre entier positif.'
     });
   }
 
-  const { name, age, city } = req.body;
-  const missingFields = [];
-
-  if (name === undefined || name === null || String(name).trim() === '') {
-    missingFields.push('name');
-  }
-
-  if (age === undefined || age === null || String(age).trim() === '') {
-    missingFields.push('age');
-  }
-
-  if (city === undefined || city === null || String(city).trim() === '') {
-    missingFields.push('city');
-  }
+  const { name, age, city } = req.body || {};
+  const missingFields = validateRequiredFields({ name, age, city }, ['name', 'age', 'city']);
 
   if (missingFields.length > 0) {
     return res.status(400).json({
@@ -115,16 +206,50 @@ const updateUserById = (req, res) => {
     });
   }
 
-  users[userIndex] = {
-    ...users[userIndex],
+  if (!validateAge(age)) {
+    return res.status(400).json({
+      message: 'L’age doit être un nombre entier positif.'
+    });
+  }
+
+  const updatedData = {
     name: String(name).trim(),
-    age,
+    age: Number(age),
     city: String(city).trim()
   };
 
+  if (!isSupabaseConfigured()) {
+    const userIndex = users.findIndex((user) => user.id === userId);
+
+    if (userIndex === -1) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    }
+
+    users[userIndex] = {
+      ...users[userIndex],
+      ...updatedData
+    };
+
+    return res.status(200).json({
+      message: 'Utilisateur mis à jour avec succès.',
+      user: users[userIndex]
+    });
+  }
+
+  const { data, error } = await supabase
+    .from('users')
+    .update(updatedData)
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+  }
+
   return res.status(200).json({
-    message: 'Utilisateur mis à jour avec succès',
-    user: users[userIndex]
+    message: 'Utilisateur mis à jour avec succès.',
+    user: data
   });
 };
 
@@ -133,5 +258,9 @@ module.exports = {
   getUserById,
   createUser,
   deleteUserById,
-  updateUserById
+  updateUserById,
+  parseUserId,
+  validateRequiredFields,
+  validateAge,
+  isSupabaseConfigured
 };
