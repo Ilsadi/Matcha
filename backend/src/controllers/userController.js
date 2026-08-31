@@ -83,9 +83,55 @@ const deleteUserById = (req, res) => {
   });
 };
 
+const updateUserById = (req, res) => {
+  const userId = Number(req.params.id);
+  const userIndex = users.findIndex((user) => user.id === userId);
+
+  if (userIndex === -1) {
+    return res.status(404).json({
+      message: 'Utilisateur non trouvé'
+    });
+  }
+
+  const { name, age, city } = req.body;
+  const missingFields = [];
+
+  if (name === undefined || name === null || String(name).trim() === '') {
+    missingFields.push('name');
+  }
+
+  if (age === undefined || age === null || String(age).trim() === '') {
+    missingFields.push('age');
+  }
+
+  if (city === undefined || city === null || String(city).trim() === '') {
+    missingFields.push('city');
+  }
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      message: 'Informations manquantes pour mettre à jour l’utilisateur.',
+      missingFields
+    });
+  }
+
+  users[userIndex] = {
+    ...users[userIndex],
+    name: String(name).trim(),
+    age,
+    city: String(city).trim()
+  };
+
+  return res.status(200).json({
+    message: 'Utilisateur mis à jour avec succès',
+    user: users[userIndex]
+  });
+};
+
 module.exports = {
   getUsers,
   getUserById,
   createUser,
-  deleteUserById
+  deleteUserById,
+  updateUserById
 };
