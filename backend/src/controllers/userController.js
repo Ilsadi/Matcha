@@ -1,4 +1,4 @@
-const users = require('../data/users');
+const users = require('../data/usersData');
 
 const getUsers = (req, res) => {
   const { city } = req.query;
@@ -30,7 +30,43 @@ const getUserById = (req, res) => {
   return res.status(200).json(user);
 };
 
+const createUser = (req, res) => {
+  const { name, age, city } = req.body;
+  const missingFields = [];
+
+  if (name === undefined || name === null || String(name).trim() === '') {
+    missingFields.push('name');
+  }
+
+  if (age === undefined || age === null || String(age).trim() === '') {
+    missingFields.push('age');
+  }
+
+  if (city === undefined || city === null || String(city).trim() === '') {
+    missingFields.push('city');
+  }
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      message: 'Informations manquantes pour créer un utilisateur.',
+      missingFields
+    });
+  }
+
+  const newUser = {
+    id: users.length ? users[users.length - 1].id + 1 : 1,
+    name: String(name).trim(),
+    age,
+    city: String(city).trim()
+  };
+
+  users.push(newUser);
+
+  return res.status(201).json(newUser);
+};
+
 module.exports = {
   getUsers,
-  getUserById
+  getUserById,
+  createUser
 };
