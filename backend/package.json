@@ -1,0 +1,16 @@
+{
+  "name": "matcha-backend",
+  "version": "1.0.0",
+  "description": "Backend API Express pour Matcha",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}
