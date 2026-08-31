@@ -65,8 +65,27 @@ const createUser = (req, res) => {
   return res.status(201).json(newUser);
 };
 
+const deleteUserById = (req, res) => {
+  const userId = Number(req.params.id);
+  const userIndex = users.findIndex((user) => user.id === userId);
+
+  if (userIndex === -1) {
+    return res.status(404).json({
+      message: 'Utilisateur non trouvé'
+    });
+  }
+
+  const [deletedUser] = users.splice(userIndex, 1);
+
+  return res.status(200).json({
+    message: 'Utilisateur supprimé avec succès',
+    deletedUser
+  });
+};
+
 module.exports = {
   getUsers,
   getUserById,
-  createUser
+  createUser,
+  deleteUserById
 };
