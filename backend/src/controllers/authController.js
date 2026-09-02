@@ -1,11 +1,67 @@
 const supabase = require('../config/supabase');
 
-const signUp = async (req, res) => {
-  const { email, password, name } = req.body || {};
+const sanitizeString = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
 
-  if (!email || !password) {
+  return value.trim();
+};
+
+const validateRequiredFields = (payload, requiredFields) => {
+  const missingFields = requiredFields.filter((field) => {
+    const value = payload[field];
+    return value === undefined || value === null || String(value).trim() === '';
+  });
+
+  return missingFields;
+};
+
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+
+const normalizeUsername = (value) => {
+  const username = sanitizeString(value).toLowerCase();
+  return username;
+};
+
+const signUp = async (req, res) => {
+  const { email, password, username, first_name, last_name } = req.body || {};
+  const missingFields = validateRequiredFields({ email, password, username }, ['email', 'password', 'username']);
+
+  if (missingFields.length > 0) {
     return res.status(400).json({
-      message: 'Email et mot de passe sont requis.'
+      message: 'Les champs email, password et username sont requis.',
+      missingFields
+    });
+  }
+
+  const emailValue = sanitizeString(email);
+  const passwordValue = String(password).trim();
+  const usernameValue = normalizeUsername(username);
+  const firstNameValue = sanitizeString(first_name);
+  const lastNameValue = sanitizeString(last_name);
+
+  if (!isValidEmail(emailValue)) {
+    return res.status(400).json({
+      message: 'L’email fourni est invalide.'
+    });
+  }
+
+  if (passwordValue.length < 8) {
+    return res.status(400).json({
+      message: 'Le mot de passe doit contenir au moins 8 caractères.'
+    });
+  }
+
+  if (!usernameValue || usernameValue.length < 3 || usernameValue.length > 30) {
+    return res.status(400).json({
+      message: 'Le username doit contenir entre 3 et 30 caractères.'
+    });
+  }
+
+  if (!/^[a-zA-Z0-9_.-]+$/.test(usernameValue)) {
+    return res.status(400).json({
+      message: 'Le username ne doit contenir que des lettres, chiffres, points, tirets ou underscores.'
     });
   }
 
@@ -15,12 +71,33 @@ const signUp = async (req, res) => {
     });
   }
 
+  const { data: existingProfile, error: existingProfileError } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('username', usernameValue)
+    .maybeSingle();
+
+  if (existingProfileError) {
+    return res.status(500).json({
+      message: 'Erreur lors de la vérification du username.',
+      error: existingProfileError.message
+    });
+  }
+
+  if (existingProfile) {
+    return res.status(409).json({
+      message: 'Ce username est déjà utilisé.'
+    });
+  }
+
   const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
+    email: emailValue,
+    password: passwordValue,
     options: {
       data: {
-        name: name || ''
+        username: usernameValue,
+        first_name: firstNameValue,
+        last_name: lastNameValue
       }
     }
   });
@@ -31,10 +108,35 @@ const signUp = async (req, res) => {
     });
   }
 
+  const userId = data?.user?.id;
+  const profilePayload = {
+    id: userId,
+    username: usernameValue,
+    email: emailValue,
+    first_name: firstNameValue || null,
+    last_name: lastNameValue || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  if (userId) {
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert(profilePayload, { onConflict: 'id' });
+
+    if (profileError) {
+      return res.status(500).json({
+        message: 'L\'inscription a réussi mais la création du profil a échoué.',
+        error: profileError.message
+      });
+    }
+  }
+
   return res.status(201).json({
     message: 'Inscription réussie.',
     user: data.user,
-    session: data.session
+    session: data.session,
+    profile: profilePayload
   });
 };
 
@@ -54,8 +156,8 @@ const signIn = async (req, res) => {
   }
 
   const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password
+    email: sanitizeString(email),
+    password: String(password).trim()
   });
 
   if (error) {
