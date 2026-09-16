@@ -1,0 +1,41 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #d4d4d4;
+}
+
+.logo {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.main {
+  flex: 1;
+  padding: 1.5rem 1rem;
+}
+
+.footer {
+  padding: 1rem;
+  border-top: 1px solid #d4d4d4;
+  color: #595959;
+  text-align: center;
+}
+
+@media (max-width: 30rem) {
+  .header,
+  .footer {
+    padding: 0.75rem;
+  }
+
+  .main {
+    padding: 1rem 0.75rem;
+  }
+}

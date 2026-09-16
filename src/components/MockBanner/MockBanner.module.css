@@ -1,0 +1,22 @@
+.banner {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  padding: 0.5rem 1rem;
+
+  background-color: #7a2e00;
+  color: #ffffff;
+
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.4;
+}
+
+@media (max-width: 30rem) {
+  .banner {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.6rem;
+  }
+}
